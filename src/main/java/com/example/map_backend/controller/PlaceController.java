@@ -46,5 +46,31 @@ public class PlaceController {
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-}
 
+    @GetMapping("/closest")
+    public ResponseEntity<Map<String, Object>> findClosestPlace(@RequestParam double lat, @RequestParam double lng) {
+        try {
+            Place place = placeService.findClosestPlace(lat, lng);
+            if (place == null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Aucun lieu trouvé près des coordonnées fournies");
+                return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+            }
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", place);
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Erreur serveur");
+            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+}

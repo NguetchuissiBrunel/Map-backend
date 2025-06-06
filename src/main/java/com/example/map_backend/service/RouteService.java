@@ -30,14 +30,14 @@ public class RouteService {
     private long findNearestNode(Point point) throws Exception {
         String roadNodeQuery = """
             SELECT DISTINCT source as id, ST_Distance(
-                ST_Transform(geom, 3857), 
+                ST_Transform(geom, 3857),
                 ST_Transform(ST_SetSRID(ST_Point(?, ?), 4326), 3857)
             ) as distance
             FROM roads
             WHERE source IS NOT NULL
             UNION
             SELECT DISTINCT target as id, ST_Distance(
-                ST_Transform(geom, 3857), 
+                ST_Transform(geom, 3857),
                 ST_Transform(ST_SetSRID(ST_Point(?, ?), 4326), 3857)
             ) as distance
             FROM roads

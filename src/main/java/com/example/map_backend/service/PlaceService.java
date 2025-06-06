@@ -21,4 +21,11 @@ public class PlaceService {
         }
         return placeRepository.findByNameContaining(name);
     }
+
+    public Place findClosestPlace(double lat, double lng) {
+        if (Double.isNaN(lat) || Double.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            throw new IllegalArgumentException("Coordonnées invalides : latitude doit être entre -90 et 90, longitude entre -180 et 180");
+        }
+        return placeRepository.findClosestPlace(lat, lng);
+    }
 }

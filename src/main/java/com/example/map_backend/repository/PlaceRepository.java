@@ -38,4 +38,19 @@ public class PlaceRepository {
             return null; // Lieu non trouvé
         }
     }
+
+    public Place findClosestPlace(double lat, double lng) {
+        String sql = "SELECT id, name, ST_X(geom) as lng, ST_Y(geom) as lat " +
+                "FROM places " +
+                "ORDER BY geom <-> ST_SetSRID(ST_MakePoint(?, ?), 4326) LIMIT 1";
+        try {
+            return jdbcTemplate.queryForObject(sql, new Object[]{lng, lat}, (rs, rowNum) -> {
+                Place place = new Place(rs.getLong("id"), rs.getString("name"), null);
+                place.setCoordinates(new Coordinates(rs.getDouble("lat"), rs.getDouble("lng")));
+                return place;
+            });
+        } catch (Exception e) {
+            return null; // Lieu non trouvé
+        }
+    }
 }

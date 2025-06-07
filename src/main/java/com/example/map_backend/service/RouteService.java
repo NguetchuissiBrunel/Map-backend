@@ -76,7 +76,7 @@ public class RouteService {
         return result.get(0);
     }
 
-    private Route getRouteFromOSRM(List<Point> points, String mode, String startPlaceName, String endPlaceName) {
+    private List<Route> getRouteFromOSRM(List<Point> points, String mode, String startPlaceName, String endPlaceName) {
         try {
             String profile = mode.equals("walking") ? "foot" : mode.equals("cycling") ? "bike" : "car";
             String coordinates = points.stream()
@@ -84,7 +84,7 @@ public class RouteService {
                     .reduce((a, b) -> a + ";" + b)
                     .orElse("");
 
-            String url = "https://router.project-osrm.org/route/v1/" + profile + "/" + coordinates + "?steps=true&geometries=geojson&alternatives=true";
+            String url = "https://router.project-osrm.org/route/v1/" + profile + "/" + coordinates + "?steps=true&geometries=geojson&alternatives=3"; // Changé à alternatives=3
 
             Mono<String> response = webClientBuilder.build()
                     .get()
@@ -103,95 +103,101 @@ public class RouteService {
                 throw new Exception("OSRM error: " + data.get("message").asText("Unknown error"));
             }
 
-            if (data.has("routes") && data.get("routes").isArray() && data.get("routes").size() > 0) {
-                JsonNode route = data.get("routes").get(0);
-                List<RouteStep> steps = new ArrayList<>();
+            List<Route> routes = new ArrayList<>();
+            if (data.has("routes") && data.get("routes").isArray()) {
+                for (JsonNode routeNode : data.get("routes")) {
+                    List<RouteStep> steps = new ArrayList<>();
 
-                if (route.has("legs") && route.get("legs").isArray() && route.get("legs").size() > 0) {
-                    JsonNode leg = route.get("legs").get(0);
-                    if (leg.has("steps") && leg.get("steps").isArray()) {
-                        for (JsonNode step : leg.get("steps")) {
-                            String geometry = "";
-                            if (step.has("geometry") && step.get("geometry").has("coordinates")) {
-                                JsonNode coordinates_node = step.get("geometry").get("coordinates");
-                                if (coordinates_node.isArray() && coordinates_node.size() > 0) {
-                                    StringBuilder geom = new StringBuilder("LINESTRING(");
-                                    for (JsonNode coord : coordinates_node) {
-                                        if (coord.isArray() && coord.size() >= 2) {
-                                            geom.append(coord.get(0).asDouble()).append(" ")
-                                                    .append(coord.get(1).asDouble()).append(", ");
+                    if (routeNode.has("legs") && routeNode.get("legs").isArray() && routeNode.get("legs").size() > 0) {
+                        JsonNode leg = routeNode.get("legs").get(0);
+                        if (leg.has("steps") && leg.get("steps").isArray()) {
+                            for (JsonNode step : leg.get("steps")) {
+                                String geometry = "";
+                                if (step.has("geometry") && step.get("geometry").has("coordinates")) {
+                                    JsonNode coordinates_node = step.get("geometry").get("coordinates");
+                                    if (coordinates_node.isArray() && coordinates_node.size() > 0) {
+                                        StringBuilder geom = new StringBuilder("LINESTRING(");
+                                        for (JsonNode coord : coordinates_node) {
+                                            if (coord.isArray() && coord.size() >= 2) {
+                                                geom.append(coord.get(0).asDouble()).append(" ")
+                                                        .append(coord.get(1).asDouble()).append(", ");
+                                            }
+                                        }
+                                        if (geom.length() > 11) {
+                                            geom.setLength(geom.length() - 2);
+                                            geom.append(")");
+                                            geometry = geom.toString();
                                         }
                                     }
-                                    if (geom.length() > 11) {
-                                        geom.setLength(geom.length() - 2);
-                                        geom.append(")");
-                                        geometry = geom.toString();
+                                }
+
+                                RouteStep routeStep = new RouteStep();
+                                routeStep.setGeometry(geometry);
+
+                                String instruction = "Step";
+                                if (step.has("maneuver") && step.get("maneuver").has("instruction")) {
+                                    instruction = step.get("maneuver").get("instruction").asText("Step");
+                                }
+                                routeStep.setSource(instruction);
+                                routeStep.setTarget(instruction);
+
+                                routeStep.setDistance(step.has("distance") ? step.get("distance").asDouble() : 0.0);
+                                routeStep.setDuration(step.has("duration") ? step.get("duration").asDouble() : 0.0);
+                                steps.add(routeStep);
+                            }
+                        }
+                    }
+
+                    if (steps.isEmpty() && routeNode.has("geometry")) {
+                        String geometry = "";
+                        JsonNode geom_node = routeNode.get("geometry");
+                        if (geom_node.has("coordinates") && geom_node.get("coordinates").isArray()) {
+                            JsonNode coordinates_node = geom_node.get("coordinates");
+                            if (coordinates_node.size() > 0) {
+                                StringBuilder geom = new StringBuilder("LINESTRING(");
+                                for (JsonNode coord : coordinates_node) {
+                                    if (coord.isArray() && coord.size() >= 2) {
+                                        geom.append(coord.get(0).asDouble()).append(" ")
+                                                .append(coord.get(1).asDouble()).append(", ");
                                     }
                                 }
-                            }
-
-                            RouteStep routeStep = new RouteStep();
-                            routeStep.setGeometry(geometry);
-
-                            String instruction = "Step";
-                            if (step.has("maneuver") && step.get("maneuver").has("instruction")) {
-                                instruction = step.get("maneuver").get("instruction").asText("Step");
-                            }
-                            routeStep.setSource(instruction);
-                            routeStep.setTarget(instruction);
-
-                            routeStep.setDistance(step.has("distance") ? step.get("distance").asDouble() : 0.0);
-                            routeStep.setDuration(step.has("duration") ? step.get("duration").asDouble() : 0.0);
-                            steps.add(routeStep);
-                        }
-                    }
-                }
-
-                if (steps.isEmpty() && route.has("geometry")) {
-                    String geometry = "";
-                    JsonNode geom_node = route.get("geometry");
-                    if (geom_node.has("coordinates") && geom_node.get("coordinates").isArray()) {
-                        JsonNode coordinates_node = geom_node.get("coordinates");
-                        if (coordinates_node.size() > 0) {
-                            StringBuilder geom = new StringBuilder("LINESTRING(");
-                            for (JsonNode coord : coordinates_node) {
-                                if (coord.isArray() && coord.size() >= 2) {
-                                    geom.append(coord.get(0).asDouble()).append(" ")
-                                            .append(coord.get(1).asDouble()).append(", ");
+                                if (geom.length() > 11) {
+                                    geom.setLength(geom.length() - 2);
+                                    geom.append(")");
+                                    geometry = geom.toString();
                                 }
                             }
-                            if (geom.length() > 11) {
-                                geom.setLength(geom.length() - 2);
-                                geom.append(")");
-                                geometry = geom.toString();
-                            }
                         }
+
+                        RouteStep defaultStep = new RouteStep();
+                        defaultStep.setGeometry(geometry);
+                        defaultStep.setSource("Start");
+                        defaultStep.setTarget("End");
+                        defaultStep.setDistance(routeNode.has("distance") ? routeNode.get("distance").asDouble() : 0.0);
+                        defaultStep.setDuration(routeNode.has("duration") ? routeNode.get("duration").asDouble() : 0.0);
+                        steps.add(defaultStep);
                     }
 
-                    RouteStep defaultStep = new RouteStep();
-                    defaultStep.setGeometry(geometry);
-                    defaultStep.setSource("Start");
-                    defaultStep.setTarget("End");
-                    defaultStep.setDistance(route.has("distance") ? route.get("distance").asDouble() : 0.0);
-                    defaultStep.setDuration(route.has("duration") ? route.get("duration").asDouble() : 0.0);
-                    steps.add(defaultStep);
+                    Route resultRoute = new Route();
+                    resultRoute.setDistance(routeNode.has("distance") ? routeNode.get("distance").asDouble() : 0.0);
+                    resultRoute.setDuration(routeNode.has("duration") ? routeNode.get("duration").asDouble() : 0.0);
+                    resultRoute.setSteps(steps);
+                    resultRoute.setStartPlaceName(startPlaceName);
+                    resultRoute.setEndPlaceName(endPlaceName);
+                    routes.add(resultRoute);
                 }
-
-                Route resultRoute = new Route();
-                resultRoute.setDistance(route.has("distance") ? route.get("distance").asDouble() : 0.0);
-                resultRoute.setDuration(route.has("duration") ? route.get("duration").asDouble() : 0.0);
-                resultRoute.setSteps(steps);
-                resultRoute.setStartPlaceName(startPlaceName);
-                resultRoute.setEndPlaceName(endPlaceName);
-                return resultRoute;
             }
 
-            throw new Exception("No valid routes found in OSRM response");
+            if (routes.isEmpty()) {
+                throw new Exception("No valid routes found in OSRM response");
+            }
+
+            return routes;
 
         } catch (Exception e) {
             System.err.println("Error with OSRM: " + e.getMessage());
             e.printStackTrace();
-            return null;
+            return new ArrayList<>();
         }
     }
 
@@ -214,12 +220,12 @@ public class RouteService {
                 }
 
                 String nodeValidationQuery = """
-                    SELECT COUNT(*) as count FROM (
-                        SELECT source as node FROM roads WHERE source = ? OR target = ?
-                        UNION
-                        SELECT target as node FROM roads WHERE source = ? OR target = ?
-                    ) nodes
-                """;
+                SELECT COUNT(*) as count FROM (
+                    SELECT source as node FROM roads WHERE source = ? OR target = ?
+                    UNION
+                    SELECT target as node FROM roads WHERE source = ? OR target = ?
+                ) nodes
+            """;
 
                 Integer nodeCount = jdbcTemplate.queryForObject(nodeValidationQuery, Integer.class,
                         source, source, target, target);
@@ -231,27 +237,27 @@ public class RouteService {
                 double vitesse = mode.equals("driving") ? 25 : mode.equals("walking") ? 2 : 8;
 
                 String query = """
-                    WITH chemins AS (
-                        SELECT path_id, path_seq, node, edge, cost, agg_cost
-                        FROM pgr_ksp(
-                            'SELECT id, source, target, cost, reverse_cost FROM roads WHERE cost IS NOT NULL AND cost > 0',
-                            ?, ?, 3, false
-                        )
+                WITH chemins AS (
+                    SELECT path_id, path_seq, node, edge, cost, agg_cost
+                    FROM pgr_ksp(
+                        'SELECT id, source, target, cost, reverse_cost FROM roads WHERE cost IS NOT NULL AND cost > 0',
+                        ?, ?, 3, false
                     )
-                    SELECT
-                        c.path_id,
-                        c.path_seq,
-                        ST_AsText(r.geom) as geometry,
-                        COALESCE(l1.nom, 'Node ' || r.source) as source,
-                        COALESCE(l2.nom, 'Node ' || r.target) as target,
-                        c.cost as distance
-                    FROM chemins c
-                    JOIN roads r ON c.edge = r.id
-                    LEFT JOIN places l1 ON r.source = l1.id
-                    LEFT JOIN places l2 ON r.target = l2.id
-                    WHERE c.edge > 0
-                    ORDER BY c.path_id, c.path_seq
-                """;
+                )
+                SELECT
+                    c.path_id,
+                    c.path_seq,
+                    ST_AsText(r.geom) as geometry,
+                    COALESCE(l1.nom, 'Node ' || r.source) as source,
+                    COALESCE(l2.nom, 'Node ' || r.target) as target,
+                    c.cost as distance
+                FROM chemins c
+                JOIN roads r ON c.edge = r.id
+                LEFT JOIN places l1 ON r.source = l1.id
+                LEFT JOIN places l2 ON r.target = l2.id
+                WHERE c.edge > 0
+                ORDER BY c.path_id, c.path_seq
+            """;
 
                 List<RouteStep> routeStepsA = new ArrayList<>();
                 List<RouteStep> routeStepsB = new ArrayList<>();
@@ -324,7 +330,7 @@ public class RouteService {
                 if (!routes.isEmpty()) {
                     System.out.println("Route found with pgRouting: " + routes.size() + " alternatives");
                     RouteResponse response = new RouteResponse();
-                    response.setRoute(routes.get(0));
+                    response.setRoutes(routes); // Retourne toutes les routes
                     return response;
                 }
 
@@ -334,11 +340,11 @@ public class RouteService {
                 System.out.println("Switching to external API...");
             }
 
-            Route externalRoute = getRouteFromOSRM(points, mode, startPlaceName, endPlaceName);
-            if (externalRoute != null) {
-                System.out.println("Route calculated with external API");
+            List<Route> externalRoutes = getRouteFromOSRM(points, mode, startPlaceName, endPlaceName);
+            if (!externalRoutes.isEmpty()) {
+                System.out.println("Routes calculated with external API: " + externalRoutes.size() + " alternatives");
                 RouteResponse response = new RouteResponse();
-                response.setRoute(externalRoute);
+                response.setRoutes(externalRoutes);
                 return response;
             }
 
@@ -350,11 +356,11 @@ public class RouteService {
             System.err.println("General error in RouteWithPgRouting: " + e.getMessage());
             e.printStackTrace();
 
-            Route externalRoute = getRouteFromOSRM(points, mode, startPlaceName, endPlaceName);
-            if (externalRoute != null) {
-                System.out.println("Fallback route calculated with external API");
+            List<Route> externalRoutes = getRouteFromOSRM(points, mode, startPlaceName, endPlaceName);
+            if (!externalRoutes.isEmpty()) {
+                System.out.println("Fallback routes calculated with external API: " + externalRoutes.size() + " alternatives");
                 RouteResponse response = new RouteResponse();
-                response.setRoute(externalRoute);
+                response.setRoutes(externalRoutes);
                 return response;
             }
 

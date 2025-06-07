@@ -1,17 +1,22 @@
 package com.example.map_backend.model;
 
+import java.util.List;
+
 public class RouteResponse {
-    private Route route;
+
+    private List<Route> routes;
     private String error;
 
     // Getters et setters
-    public Route getRoute() {
-        return route;
+
+    public void setRoutes(List<Route> routes) {
+        this.routes = routes;
     }
 
-    public void setRoute(Route route) {
-        this.route = route;
+    public List<Route> getRoutes() {
+        return routes;
     }
+
 
     public String getError() {
         return error;

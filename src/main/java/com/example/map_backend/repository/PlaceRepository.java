@@ -18,19 +18,24 @@ public class PlaceRepository {
     }
 
     public List<Place> findByNameContaining(String name) {
-        String sql = "SELECT id, name, ST_X(geom) as lng, ST_Y(geom) as lat FROM places WHERE name ILIKE ? LIMIT 10";
+        String sql = "SELECT id, nom, ST_X(geom) as lng, ST_Y(geom) as lat FROM lieux " +
+                "WHERE lower(nom) ILIKE ? " +
+                "AND ST_Contains(ST_SetSRID(ST_MakeBox2D(ST_Point(11.4, 3.75), ST_Point(11.6, 3.95)), 4326), geom) " +
+                "LIMIT 10";
         return jdbcTemplate.query(sql, new Object[]{"%" + name + "%"}, (rs, rowNum) -> {
-            Place place = new Place(rs.getLong("id"), rs.getString("name"), null);
+            Place place = new Place(rs.getLong("id"), rs.getString("nom"), null);
             place.setCoordinates(new Coordinates(rs.getDouble("lat"), rs.getDouble("lng")));
             return place;
         });
     }
 
     public Place findPlaceByExactName(String name) {
-        String sql = "SELECT id, name, ST_X(geom) as lng, ST_Y(geom) as lat FROM places WHERE name = ?";
+        String sql = "SELECT id, nom, ST_X(geom) as lng, ST_Y(geom) as lat FROM lieux " +
+                "WHERE lower(nom) = ? " +
+                "AND ST_Contains(ST_SetSRID(ST_MakeBox2D(ST_Point(11.4, 3.75), ST_Point(11.6, 3.95)), 4326), geom)";
         try {
             return jdbcTemplate.queryForObject(sql, new Object[]{name}, (rs, rowNum) -> {
-                Place place = new Place(rs.getLong("id"), rs.getString("name"), null);
+                Place place = new Place(rs.getLong("id"), rs.getString("nom"), null);
                 place.setCoordinates(new Coordinates(rs.getDouble("lat"), rs.getDouble("lng")));
                 return place;
             });
@@ -40,17 +45,23 @@ public class PlaceRepository {
     }
 
     public Place findClosestPlace(double lat, double lng) {
-        String sql = "SELECT id, name, ST_X(geom) as lng, ST_Y(geom) as lat " +
-                "FROM places " +
+        String sql = "SELECT id, nom, ST_X(geom) as lng, ST_Y(geom) as lat " +
+                "FROM lieux " +
+                "WHERE ST_Contains(ST_SetSRID(ST_MakeBox2D(ST_Point(11.4, 3.75), ST_Point(11.6, 3.95)), 4326), geom) " +
                 "ORDER BY geom <-> ST_SetSRID(ST_MakePoint(?, ?), 4326) LIMIT 1";
         try {
             return jdbcTemplate.queryForObject(sql, new Object[]{lng, lat}, (rs, rowNum) -> {
-                Place place = new Place(rs.getLong("id"), rs.getString("name"), null);
+                Place place = new Place(rs.getLong("id"), rs.getString("nom"), null);
                 place.setCoordinates(new Coordinates(rs.getDouble("lat"), rs.getDouble("lng")));
                 return place;
             });
         } catch (Exception e) {
             return null; // Lieu non trouvé
         }
+    }
+
+    public void savePlace(Place place) {
+        String sql = "INSERT INTO lieux (nom, geom) VALUES (?, ST_SetSRID(ST_MakePoint(?, ?), 4326))";
+        jdbcTemplate.update(sql, place.getName(), place.getCoordinates().getLng(), place.getCoordinates().getLat());
     }
 }

@@ -1,0 +1,258 @@
+
+  openapi: 3.0.3
+  info:
+    title: Map Backend API
+    description: API for managing routes and places in a mapping application focused on Yaoundé.
+    version: 1.0.0
+  servers:
+    - url: /api
+      description: Main API server
+  paths:
+    /route:
+      post:
+        summary: Calculate a route between two points
+        operationId: calculateRoute
+        tags:
+          - Route
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteRequestBody'
+        responses:
+          '200':
+            description: Successful route calculation
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/RouteResponse'
+          '400':
+            description: Invalid request (e.g., invalid coordinates or transport mode)
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/RouteResponseError'
+          '500':
+            description: Server error during route calculation
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/RouteResponseError'
+    /places:
+      get:
+        summary: Search for places by name
+        operationId: searchPlaces
+        tags:
+          - Place
+        parameters:
+          - name: name
+            in: query
+            required: true
+            schema:
+              type: string
+            description: Name of the place to search for
+        responses:
+          '200':
+            description: List of places found
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceSearchResponse'
+          '400':
+            description: Invalid request (e.g., missing or empty name parameter)
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceErrorResponse'
+          '404':
+            description: No places found
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceErrorResponse'
+          '500':
+            description: Server error
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceErrorResponse'
+    /places/closest:
+      get:
+        summary: Find the closest place to given coordinates
+        operationId: findClosestPlace
+        tags:
+          - Place
+        parameters:
+          - name: lat
+            in: query
+            required: true
+            schema:
+              type: number
+              format: double
+              minimum: -90
+              maximum: 90
+            description: Latitude of the reference point
+          - name: lng
+            in: query
+            required: true
+            schema:
+              type: number
+              format: double
+              minimum: -180
+              maximum: 180
+            description: Longitude of the reference point
+        responses:
+          '200':
+            description: Closest place found
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceSearchResponse'
+          '400':
+            description: Invalid coordinates
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceErrorResponse'
+          '404':
+            description: No place found near the provided coordinates
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceErrorResponse'
+          '500':
+            description: Server error
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PlaceErrorResponse'
+  components:
+    schemas:
+      RouteRequestBody:
+        type: object
+        required:
+          - points
+        properties:
+          points:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              $ref: '#/components/schemas/Point'
+          mode:
+            type: string
+            enum: [driving, walking, cycling]
+            default: driving
+          startPlaceName:
+            type: string
+            default: Unknown Start
+          endPlaceName:
+            type: string
+            default: Unknown Destination
+      Point:
+        type: object
+        required:
+          - lat
+          - lng
+        properties:
+          lat:
+            type: number
+            format: double
+            minimum: -90
+            maximum: 90
+          lng:
+            type: number
+            format: double
+            minimum: -180
+            maximum: 180
+      RouteResponse:
+        type: object
+        properties:
+          routes:
+            type: array
+            items:
+              $ref: '#/components/schemas/Route'
+          error:
+            type: string
+            nullable: true
+      RouteResponseError:
+        type: object
+        properties:
+          error:
+            type: string
+      Route:
+        type: object
+        properties:
+          distance:
+            type: number
+            format: double
+          duration:
+            type: number
+            format: double
+          steps:
+            type: array
+            items:
+              $ref: '#/components/schemas/RouteStep'
+          startPlaceName:
+            type: string
+          endPlaceName:
+            type: string
+      RouteStep:
+        type: object
+        properties:
+          geometry:
+            type: string
+          source:
+            type: string
+          target:
+            type: string
+          distance:
+            type: number
+            format: double
+          duration:
+            type: number
+            format: double
+      PlaceSearchResponse:
+        type: object
+        properties:
+          success:
+            type: boolean
+          data:
+            type: array
+            items:
+              $ref: '#/components/schemas/Place'
+          error:
+            type: string
+            nullable: true
+      PlaceErrorResponse:
+        type: object
+        properties:
+          success:
+            type: boolean
+          error:
+            type: string
+      Place:
+        type: object
+        properties:
+          id:
+            type: integer
+            format: int64
+          name:
+            type: string
+          coordinates:
+            $ref: '#/components/schemas/Coordinates'
+      Coordinates:
+        type: object
+        properties:
+          lat:
+            type: number
+            format: double
+          lng:
+            type: number
+            format: double
+  tags:
+    - name: Route
+      description: Operations related to route calculation
+    - name: Place
+      description: Operations related to place searching

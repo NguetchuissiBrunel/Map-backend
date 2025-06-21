@@ -33,14 +33,14 @@ public class RouteService {
                 ST_Transform(geom, 3857),
                 ST_Transform(ST_SetSRID(ST_Point(?, ?), 4326), 3857)
             ) as distance
-            FROM roads
+            FROM routes
             WHERE source IS NOT NULL
             UNION
             SELECT DISTINCT target as id, ST_Distance(
                 ST_Transform(geom, 3857),
                 ST_Transform(ST_SetSRID(ST_Point(?, ?), 4326), 3857)
             ) as distance
-            FROM roads
+            FROM routes
             WHERE target IS NOT NULL
             ORDER BY distance
             LIMIT 1
@@ -60,7 +60,7 @@ public class RouteService {
 
         String placeQuery = """
             SELECT id
-            FROM places
+            FROM lieux
             WHERE geom IS NOT NULL
             ORDER BY geom <-> ST_SetSRID(ST_Point(?, ?), 4326)
             LIMIT 1
@@ -221,9 +221,9 @@ public class RouteService {
 
                 String nodeValidationQuery = """
                 SELECT COUNT(*) as count FROM (
-                    SELECT source as node FROM roads WHERE source = ? OR target = ?
+                    SELECT source as node FROM routes WHERE source = ? OR target = ?
                     UNION
-                    SELECT target as node FROM roads WHERE source = ? OR target = ?
+                    SELECT target as node FROM routes WHERE source = ? OR target = ?
                 ) nodes
             """;
 
@@ -240,7 +240,7 @@ public class RouteService {
                 WITH chemins AS (
                     SELECT path_id, path_seq, node, edge, cost, agg_cost
                     FROM pgr_ksp(
-                        'SELECT id, source, target, cost, reverse_cost FROM roads WHERE cost IS NOT NULL AND cost > 0',
+                        'SELECT id, source, target, cost, reverse_cost FROM routes WHERE cost IS NOT NULL AND cost > 0',
                         ?, ?, 3, false
                     )
                 )
@@ -252,9 +252,9 @@ public class RouteService {
                     COALESCE(l2.nom, 'Node ' || r.target) as target,
                     c.cost as distance
                 FROM chemins c
-                JOIN roads r ON c.edge = r.id
-                LEFT JOIN places l1 ON r.source = l1.id
-                LEFT JOIN places l2 ON r.target = l2.id
+                JOIN routes r ON c.edge = r.id
+                LEFT JOIN lieux l1 ON r.source = l1.id
+                LEFT JOIN lieux l2 ON r.target = l2.id
                 WHERE c.edge > 0
                 ORDER BY c.path_id, c.path_seq
             """;

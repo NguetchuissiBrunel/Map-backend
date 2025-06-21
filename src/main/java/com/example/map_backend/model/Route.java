@@ -8,6 +8,7 @@ public class Route {
     private List<RouteStep> steps;
     private String startPlaceName;
     private String endPlaceName;
+    private String geometry;
 
     // Getters et setters
     public double getDistance() {
@@ -48,5 +49,13 @@ public class Route {
 
     public void setEndPlaceName(String endPlaceName) {
         this.endPlaceName = endPlaceName;
+    }
+
+    public String getGeometry() {
+        return geometry;
+    }
+
+    public void setGeometry(String geometry) {
+        this.geometry = geometry;
     }
 }

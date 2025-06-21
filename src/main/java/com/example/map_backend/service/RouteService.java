@@ -84,7 +84,7 @@ public class RouteService {
                     .reduce((a, b) -> a + ";" + b)
                     .orElse("");
 
-            String url = "https://router.project-osrm.org/route/v1/" + profile + "/" + coordinates + "?steps=true&geometries=geojson&alternatives=3"; // Changé à alternatives=3
+            String url = "https://router.project-osrm.org/route/v1/" + profile + "/" + coordinates + "?steps=true&geometries=geojson&alternatives=3";
 
             Mono<String> response = webClientBuilder.build()
                     .get()
@@ -107,70 +107,70 @@ public class RouteService {
             if (data.has("routes") && data.get("routes").isArray()) {
                 for (JsonNode routeNode : data.get("routes")) {
                     List<RouteStep> steps = new ArrayList<>();
+                    String routeGeometry = "";
 
-                    if (routeNode.has("legs") && routeNode.get("legs").isArray() && routeNode.get("legs").size() > 0) {
-                        JsonNode leg = routeNode.get("legs").get(0);
-                        if (leg.has("steps") && leg.get("steps").isArray()) {
-                            for (JsonNode step : leg.get("steps")) {
-                                String geometry = "";
-                                if (step.has("geometry") && step.get("geometry").has("coordinates")) {
-                                    JsonNode coordinates_node = step.get("geometry").get("coordinates");
-                                    if (coordinates_node.isArray() && coordinates_node.size() > 0) {
-                                        StringBuilder geom = new StringBuilder("LINESTRING(");
-                                        for (JsonNode coord : coordinates_node) {
-                                            if (coord.isArray() && coord.size() >= 2) {
-                                                geom.append(coord.get(0).asDouble()).append(" ")
-                                                        .append(coord.get(1).asDouble()).append(", ");
-                                            }
-                                        }
-                                        if (geom.length() > 11) {
-                                            geom.setLength(geom.length() - 2);
-                                            geom.append(")");
-                                            geometry = geom.toString();
-                                        }
-                                    }
+                    if (routeNode.has("geometry") && routeNode.get("geometry").has("coordinates")) {
+                        JsonNode coordinatesNode = routeNode.get("geometry").get("coordinates");
+                        if (coordinatesNode.isArray() && coordinatesNode.size() > 0) {
+                            StringBuilder geom = new StringBuilder("LINESTRING(");
+                            for (JsonNode coord : coordinatesNode) {
+                                if (coord.isArray() && coord.size() >= 2) {
+                                    geom.append(coord.get(0).asDouble()).append(" ")
+                                            .append(coord.get(1).asDouble()).append(", ");
                                 }
-
-                                RouteStep routeStep = new RouteStep();
-                                routeStep.setGeometry(geometry);
-
-                                String instruction = "Step";
-                                if (step.has("maneuver") && step.get("maneuver").has("instruction")) {
-                                    instruction = step.get("maneuver").get("instruction").asText("Step");
-                                }
-                                routeStep.setSource(instruction);
-                                routeStep.setTarget(instruction);
-
-                                routeStep.setDistance(step.has("distance") ? step.get("distance").asDouble() : 0.0);
-                                routeStep.setDuration(step.has("duration") ? step.get("duration").asDouble() : 0.0);
-                                steps.add(routeStep);
+                            }
+                            if (geom.length() > 11) {
+                                geom.setLength(geom.length() - 2);
+                                geom.append(")");
+                                routeGeometry = geom.toString();
                             }
                         }
                     }
 
-                    if (steps.isEmpty() && routeNode.has("geometry")) {
-                        String geometry = "";
-                        JsonNode geom_node = routeNode.get("geometry");
-                        if (geom_node.has("coordinates") && geom_node.get("coordinates").isArray()) {
-                            JsonNode coordinates_node = geom_node.get("coordinates");
-                            if (coordinates_node.size() > 0) {
-                                StringBuilder geom = new StringBuilder("LINESTRING(");
-                                for (JsonNode coord : coordinates_node) {
-                                    if (coord.isArray() && coord.size() >= 2) {
-                                        geom.append(coord.get(0).asDouble()).append(" ")
-                                                .append(coord.get(1).asDouble()).append(", ");
+                    if (routeNode.has("legs") && routeNode.get("legs").isArray()) {
+                        for (JsonNode leg : routeNode.get("legs")) {
+                            if (leg.has("steps") && leg.get("steps").isArray()) {
+                                for (JsonNode step : leg.get("steps")) {
+                                    String stepGeometry = "";
+                                    if (step.has("geometry") && step.get("geometry").has("coordinates")) {
+                                        JsonNode coordinatesNode = step.get("geometry").get("coordinates");
+                                        if (coordinatesNode.isArray() && coordinatesNode.size() > 0) {
+                                            StringBuilder geom = new StringBuilder("LINESTRING(");
+                                            for (JsonNode coord : coordinatesNode) {
+                                                if (coord.isArray() && coord.size() >= 2) {
+                                                    geom.append(coord.get(0).asDouble()).append(" ")
+                                                            .append(coord.get(1).asDouble()).append(", ");
+                                                }
+                                            }
+                                            if (geom.length() > 11) {
+                                                geom.setLength(geom.length() - 2);
+                                                geom.append(")");
+                                                stepGeometry = geom.toString();
+                                            }
+                                        }
                                     }
-                                }
-                                if (geom.length() > 11) {
-                                    geom.setLength(geom.length() - 2);
-                                    geom.append(")");
-                                    geometry = geom.toString();
+
+                                    RouteStep routeStep = new RouteStep();
+                                    routeStep.setGeometry(stepGeometry);
+
+                                    String instruction = "Step";
+                                    if (step.has("maneuver") && step.get("maneuver").has("instruction")) {
+                                        instruction = step.get("maneuver").get("instruction").asText("Step");
+                                    }
+                                    routeStep.setSource(instruction);
+                                    routeStep.setTarget(instruction);
+
+                                    routeStep.setDistance(step.has("distance") ? step.get("distance").asDouble() : 0.0);
+                                    routeStep.setDuration(step.has("duration") ? step.get("duration").asDouble() : 0.0);
+                                    steps.add(routeStep);
                                 }
                             }
                         }
+                    }
 
+                    if (steps.isEmpty() && !routeGeometry.isEmpty()) {
                         RouteStep defaultStep = new RouteStep();
-                        defaultStep.setGeometry(geometry);
+                        defaultStep.setGeometry(routeGeometry);
                         defaultStep.setSource("Start");
                         defaultStep.setTarget("End");
                         defaultStep.setDistance(routeNode.has("distance") ? routeNode.get("distance").asDouble() : 0.0);
@@ -179,11 +179,12 @@ public class RouteService {
                     }
 
                     Route resultRoute = new Route();
-                    resultRoute.setDistance(routeNode.has("distance") ? routeNode.get("distance").asDouble() : 0.0);
+                    resultRoute.setDistance(routeNode.has("distance") ? routeNode.get("distance").asDouble() : 0.0); // Corrigé : "distance" au lieu de "距離"
                     resultRoute.setDuration(routeNode.has("duration") ? routeNode.get("duration").asDouble() : 0.0);
                     resultRoute.setSteps(steps);
                     resultRoute.setStartPlaceName(startPlaceName);
                     resultRoute.setEndPlaceName(endPlaceName);
+                    resultRoute.setGeometry(routeGeometry);
                     routes.add(resultRoute);
                 }
             }
@@ -306,6 +307,9 @@ public class RouteService {
                     routeA.setSteps(routeStepsA);
                     routeA.setStartPlaceName(startPlaceName);
                     routeA.setEndPlaceName(endPlaceName);
+                    routeA.setGeometry(String.join(",", routeStepsA.stream()
+                            .map(RouteStep::getGeometry)
+                            .toList()));
                     routes.add(routeA);
                 }
                 if (!routeStepsB.isEmpty()) {
@@ -315,6 +319,9 @@ public class RouteService {
                     routeB.setSteps(routeStepsB);
                     routeB.setStartPlaceName(startPlaceName);
                     routeB.setEndPlaceName(endPlaceName);
+                    routeB.setGeometry(String.join(",", routeStepsB.stream()
+                            .map(RouteStep::getGeometry)
+                            .toList()));
                     routes.add(routeB);
                 }
                 if (!routeStepsC.isEmpty()) {
@@ -324,13 +331,16 @@ public class RouteService {
                     routeC.setSteps(routeStepsC);
                     routeC.setStartPlaceName(startPlaceName);
                     routeC.setEndPlaceName(endPlaceName);
+                    routeC.setGeometry(String.join(",", routeStepsC.stream()
+                            .map(RouteStep::getGeometry)
+                            .toList()));
                     routes.add(routeC);
                 }
 
                 if (!routes.isEmpty()) {
                     System.out.println("Route found with pgRouting: " + routes.size() + " alternatives");
                     RouteResponse response = new RouteResponse();
-                    response.setRoutes(routes); // Retourne toutes les routes
+                    response.setRoutes(routes);
                     return response;
                 }
 
@@ -366,6 +376,95 @@ public class RouteService {
 
             RouteResponse response = new RouteResponse();
             response.setError("Unable to calculate route");
+            return response;
+        }
+    }
+
+    public RouteResponse routeWithDetour(Point start, Point detour, Point end, String mode, String startPlaceName, String detourPlaceName, String endPlaceName) {
+        try {
+            String osrmMode = mode.equals("taxi") || mode.equals("bus") ? "driving" : mode.equals("moto") ? "cycling" : "driving";
+
+            // Calculer le premier segment : start → detour
+            List<Point> firstSegment = List.of(start, detour);
+            List<Route> firstRoutes = getRouteFromOSRM(firstSegment, osrmMode, startPlaceName, detourPlaceName);
+            if (firstRoutes.isEmpty()) {
+                RouteResponse response = new RouteResponse();
+                response.setError("No route found for start to detour");
+                System.err.println("No route found for start to detour");
+                return response;
+            }
+
+            // Calculer le second segment : detour → end
+            List<Point> secondSegment = List.of(detour, end);
+            List<Route> secondRoutes = getRouteFromOSRM(secondSegment, osrmMode, detourPlaceName, endPlaceName);
+            if (secondRoutes.isEmpty()) {
+                RouteResponse response = new RouteResponse();
+                response.setError("No route found for detour to end");
+                System.err.println("No route found for detour to end");
+                return response;
+            }
+
+            // Combiner les itinéraires
+            List<Route> combinedRoutes = new ArrayList<>();
+            Route combinedRoute = new Route();
+            combinedRoute.setStartPlaceName(startPlaceName);
+            combinedRoute.setEndPlaceName(endPlaceName);
+
+            // Combiner les steps
+            List<RouteStep> combinedSteps = new ArrayList<>();
+            combinedSteps.addAll(firstRoutes.get(0).getSteps());
+            combinedSteps.addAll(secondRoutes.get(0).getSteps());
+
+            // Calculer la distance et la durée totales
+            double totalDistance = firstRoutes.get(0).getDistance() + secondRoutes.get(0).getDistance();
+            double totalDuration = firstRoutes.get(0).getDuration() + secondRoutes.get(0).getDuration();
+
+            combinedRoute.setSteps(combinedSteps);
+            combinedRoute.setDistance(totalDistance);
+            combinedRoute.setDuration(totalDuration);
+
+            // Combiner les géométries
+            StringBuilder wkt = new StringBuilder("LINESTRING(");
+            List<List<Double>> allCoordinates = new ArrayList<>();
+            for (RouteStep step : combinedSteps) {
+                String geometry = step.getGeometry();
+                if (geometry != null && geometry.startsWith("LINESTRING")) {
+                    String coords = geometry.substring("LINESTRING(".length(), geometry.length() - 1);
+                    String[] coordPairs = coords.split(", ");
+                    for (String coordPair : coordPairs) {
+                        String[] parts = coordPair.split(" ");
+                        if (parts.length == 2) {
+                            List<Double> point = new ArrayList<>();
+                            point.add(Double.parseDouble(parts[0]));
+                            point.add(Double.parseDouble(parts[1]));
+                            allCoordinates.add(point);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < allCoordinates.size(); i++) {
+                List<Double> coord = allCoordinates.get(i);
+                wkt.append(coord.get(0)).append(" ").append(coord.get(1));
+                if (i < allCoordinates.size() - 1) {
+                    wkt.append(", ");
+                }
+            }
+            wkt.append(")");
+            combinedRoute.setGeometry(wkt.toString());
+
+            combinedRoutes.add(combinedRoute);
+
+            System.out.println("Routes with detour calculated with OSRM: " + combinedRoutes.size() + " alternatives");
+            RouteResponse response = new RouteResponse();
+            response.setRoutes(combinedRoutes);
+            return response;
+
+        } catch (Exception e) {
+            System.err.println("Error in routeWithDetour: " + e.getMessage());
+            e.printStackTrace();
+            RouteResponse response = new RouteResponse();
+            response.setError("Unable to calculate route with detour");
             return response;
         }
     }
